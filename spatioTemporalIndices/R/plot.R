@@ -6,6 +6,20 @@
 #'
 #' @export
 plotResults <- function(run,what=NULL,range = c(-10,6), legend = TRUE){
+  mesh_project_grid <- function(mesh, field, xlim = NULL, ylim = NULL, dims = c(100, 100)) {
+    if (is.null(xlim)) xlim <- range(mesh$loc[, 1])
+    if (is.null(ylim)) ylim <- range(mesh$loc[, 2])
+    xs <- seq(xlim[1], xlim[2], length.out = dims[1])
+    ys <- seq(ylim[1], ylim[2], length.out = dims[2])
+    loc <- as.matrix(expand.grid(x = xs, y = ys))
+    eval <- fmesher::fm_evaluator(mesh, loc = loc)
+    vals <- as.vector(eval$proj$A %*% field)
+    if (!is.null(eval$proj$ok)) {
+      vals[!eval$proj$ok] <- NA
+    }
+    z <- matrix(vals, nrow = length(xs), ncol = length(ys))
+    list(x = xs, y = ys, z = z)
+  }
   if(what[1] == "sunAlt"){
     plotSunAlt(run)
   }else if(what[1] == "depth"){
@@ -58,10 +72,10 @@ plotResults <- function(run,what=NULL,range = c(-10,6), legend = TRUE){
     ll = which(run$conf$lengthGroups==as.numeric(what[3]))
     beta0This = beta0[(ll-1)*length(run$conf$years) + yearPosition]
 
-    proj = inla.mesh.projector(mesh)
     latentFieldMAP = beta0This + spatialE
+    proj <- mesh_project_grid(mesh, latentFieldMAP)
 
-    image(proj$x,proj$y, inla.mesh.project(proj, latentFieldMAP),col =  colorRampPalette(c("white","yellow", "red"))(12),
+    image(proj$x,proj$y, proj$z,col =  colorRampPalette(c("white","yellow", "red"))(12),
                xlab = '', ylab = "",
                zlim = c(range[1],range[2]),
                main = paste0("Spatial effect for length group: ", what[3]),
@@ -69,7 +83,7 @@ plotResults <- function(run,what=NULL,range = c(-10,6), legend = TRUE){
 
 
 
-    contour(proj$x, proj$y,inla.mesh.project(proj, latentFieldMAP) ,add = T,labcex  = 1,cex = 1)
+    contour(proj$x, proj$y,proj$z ,add = T,labcex  = 1,cex = 1)
     points(attributes(run$data)$locObs[attributes(run$data)$year == as.numeric(what[2]),],cex = 0.01,col = 'blue')
 
     #Convert map to UTM coordinates-------------------------------------------------------------------------
@@ -86,7 +100,7 @@ plotResults <- function(run,what=NULL,range = c(-10,6), legend = TRUE){
     #----------------------------------------------------------------------------------------------------
 
     if(legend == TRUE){
-      image.plot(proj$x,proj$y, inla.mesh.project(proj, latentFieldMAP),col =  colorRampPalette(c("white","yellow", "red"))(12),
+      image.plot(proj$x,proj$y, proj$z,col =  colorRampPalette(c("white","yellow", "red"))(12),
                  add = TRUE,legend.width = 5,legend.only = TRUE, cex = 1.6,
                  zlim = c(range[1],range[2]), axis.args = list(cex.axis = 1.3))
     }
@@ -116,10 +130,10 @@ plotResults <- function(run,what=NULL,range = c(-10,6), legend = TRUE){
     beta0 = summary(run$rep)[which(rownames(summary(run$rep))=="beta0")]
     ll = which(run$conf$lengthGroups==as.numeric(what[3]))
     beta0This = beta0[(ll-1)*length(run$conf$years) + yearPosition]
-    proj = inla.mesh.projector(mesh)
     latentFieldMAP = beta0This + ST
+    proj <- mesh_project_grid(mesh, latentFieldMAP, xlim = c(-100,1500), ylim = c(7400,9200))
 
-    image(proj$x,proj$y, inla.mesh.project(proj, latentFieldMAP),col =  colorRampPalette(c("white","yellow", "red"))(12),
+    image(proj$x,proj$y, proj$z,col =  colorRampPalette(c("white","yellow", "red"))(12),
           xlab = '', ylab = "",
           zlim = c(range[1],range[2]),
           main = "",
@@ -130,7 +144,7 @@ plotResults <- function(run,what=NULL,range = c(-10,6), legend = TRUE){
     if(addY)axis(2, at=seq(0,10000,by = 300), labels=seq(0,10000,by = 300), col.axis="black", las=2)
     title(what[2],line = -1,cex.main=1.5)
 
-    contour(proj$x, proj$y,inla.mesh.project(proj, latentFieldMAP) ,add = T,labcex  = 1,cex = 1)
+    contour(proj$x, proj$y,proj$z ,add = T,labcex  = 1,cex = 1)
     points(attributes(run$data)$locObs[attributes(run$data)$year == year,],cex = 0.1,col = 'blue')
 
     #Convert map to UTM coordinates-------------------------------------------------------------------------
@@ -147,7 +161,7 @@ plotResults <- function(run,what=NULL,range = c(-10,6), legend = TRUE){
     #----------------------------------------------------------------------------------------------------
     if(legend == TRUE){
 
-      image.plot(proj$x,proj$y, inla.mesh.project(proj, latentFieldMAP),col =  colorRampPalette(c("white","yellow", "red"))(12),
+      image.plot(proj$x,proj$y, proj$z,col =  colorRampPalette(c("white","yellow", "red"))(12),
             xlab = '', ylab = "",
             zlim = c(range[1],range[2]),
             main = "",
@@ -192,7 +206,7 @@ plotResults <- function(run,what=NULL,range = c(-10,6), legend = TRUE){
       scale = scalingConstant/scalingConstant2
 
       if(run$conf$cutoff[3] != 0){
-      A = inla.spde.make.A(meshS, loc =  mesh$loc[,1:2])
+      A = fmesher::fm_basis(meshS, loc = as.matrix(mesh$loc[,1:2]))$A
       addS1 = A%*%randomEffectsS[indexStartS:indexEndS]
       addS2 = A%*%randomEffectsS[indexStartS2:indexEndS2]
       S = (run$data$weigthLength[lD]*addS1[,1] + (1-run$data$weigthLength[lD])*addS2[,1])*scale
@@ -202,15 +216,15 @@ plotResults <- function(run,what=NULL,range = c(-10,6), legend = TRUE){
       beta0 = summary(run$rep)[which(rownames(summary(run$rep))=="beta0")]*0
       ll = which(run$conf$lengthGroups==as.numeric(what[3]))
       beta0This = beta0[(ll-1)*length(run$conf$years) + yearPosition]
-      proj = inla.mesh.projector(mesh)
       latentFieldMAP =beta0This + S +  ST
-      image(proj$x,proj$y, inla.mesh.project(proj, latentFieldMAP),col =  colorRampPalette(c("white","yellow", "red"))(12),
+      proj <- mesh_project_grid(mesh, latentFieldMAP)
+      image(proj$x,proj$y, proj$z,col =  colorRampPalette(c("white","yellow", "red"))(12),
             xlab = '', ylab = "",
             zlim = c(range[1],range[2]),
             main = paste0("Year ", what[2]),
             cex.lab = 1.1,cex.axis = 1.1, cex.main=1, cex.sub= 1.1,xaxt='n',yaxt='n')
 
-      contour(proj$x, proj$y,inla.mesh.project(proj, latentFieldMAP) ,add = T,labcex  = 1,cex = 1)
+      contour(proj$x, proj$y,proj$z ,add = T,labcex  = 1,cex = 1)
       points(attributes(run$data)$locObs[attributes(run$data)$year == year,],cex = 0.01,col = 'blue')
 
       #Convert map to UTM coordinates-------------------------------------------------------------------------
@@ -226,7 +240,7 @@ plotResults <- function(run,what=NULL,range = c(-10,6), legend = TRUE){
       polygon(mapTmp,col = 'lightgrey')
       #----------------------------------------------------------------------------------------------------
       if(legend == TRUE){
-        image.plot(proj$x,proj$y, inla.mesh.project(proj, latentFieldMAP),col =  colorRampPalette(c("white","yellow", "red"))(12),
+        image.plot(proj$x,proj$y, proj$z,col =  colorRampPalette(c("white","yellow", "red"))(12),
                    xlab = '', ylab = "",
                    zlim = c(range[1],range[2]),
                    main = "",

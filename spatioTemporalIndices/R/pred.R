@@ -58,15 +58,47 @@ adjustIndexLength <- function(index,length = NULL,stratas = stratas){
 #' @examples
 #' @return
 constructIntPoints<-function(confPred){
+  if (isTRUE(confPred$useDataHull)) {
+    if (is.null(confPred$hullUTM)) {
+      stop("confPred$hullUTM is required when useDataHull = TRUE")
+    }
+    utmZone <- if (!is.null(confPred$utmZone)) confPred$utmZone else 35
+    utmCRS <- CRS(paste0("+proj=utm +zone=", utmZone, " +datum=WGS84 +units=km +no_defs"))
+
+    pts <- as.matrix(confPred$hullUTM)
+    storage.mode(pts) <- "double"
+    h <- chull(pts)
+    hullCoords <- pts[c(h, h[1]), , drop = FALSE]
+    hullPoly <- SpatialPolygons(list(Polygons(list(Polygon(hullCoords)), "1")), proj4string = utmCRS)
+
+    points <- sp::makegrid(hullPoly, confPred$nIntPoints)
+    pointsSP <- sp::SpatialPoints(points, utmCRS)
+    inside <- !is.na(over(pointsSP, hullPoly))
+    points <- points[inside, , drop = FALSE]
+    pointsSP <- sp::SpatialPoints(points, utmCRS)
+
+    locUTM <- data.frame(points[, 1], points[, 2])
+    colnames(locUTM) <- c("UTMX", "UTMY")
+
+    nStrata <- if (!is.null(confPred$Strata)) length(confPred$Strata) else 1
+    predLoc <- matrix(-1, nStrata, max(2000, nrow(points)))
+    if (nrow(points) > 0) {
+      predLoc[1, 1:nrow(points)] <- 0:(nrow(points) - 1)
+    }
+
+    return(list(locUTM = locUTM, predLoc = predLoc))
+  }
+
   dataDir <- system.file("extdata", package = "spatioTemporalIndices")
 
   #Read stratas and convert to UTM
   preStratas=read.delim(paste0(dataDir,"/vintertokt_barentshavny.txt"),head=F)
-  stratasPolygons = lapply(confPred$Strata,function(f) rgeos::readWKT(preStratas$V2[f]))
+  stratasPolygons = lapply(confPred$Strata,function(f) as(sf::st_as_sfc(preStratas$V2[f], crs = 4326), "Spatial"))
   for(i in 1:length(stratasPolygons)){
     stratasPolygons[[i]]@proj4string = CRS("+proj=longlat")
   }
-  utmCRS = CRS("+proj=utm +zone=35 +datum=WGS84 +units=km +no_defs")
+  utmZone <- if (!is.null(confPred$utmZone)) confPred$utmZone else 35
+  utmCRS = CRS(paste0("+proj=utm +zone=", utmZone, " +datum=WGS84 +units=km +no_defs"))
   stratasPolygonsUTM = lapply(stratasPolygons,function(f) spTransform(f,utmCRS))
   stratasPolygonsUTMtmp = lapply(1:length(stratasPolygonsUTM), function(x) {
     stratasPolygonsUTM[[x]]@polygons[[1]]@ID = as.character(x)
@@ -108,5 +140,3 @@ constructIntPoints<-function(confPred){
 
   return(list(locUTM = locUTM, predLoc = predLoc))
 }
-
-

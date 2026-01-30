@@ -1,4 +1,3 @@
-
 ##' defConf
 ##'
 ##' Configurations used. The object returned is
@@ -24,35 +23,52 @@
 ##' @param zeroInflated If 0-No zero inflation, 1- use zero inflation (NB! not fully implemented)
 ##' @details
 ##' @export
-defConf <- function(years, lengthGroups,spatial = 1,spatioTemporal = 1,nugget = 1,beta0=1,splineDepth=c(6,1),sunAlt=c(1,0),duration=0,
-                    maxLength = 100,minLength = 5,reduceLength = 3,
-                    cutoff = c(100,100,0), cbound = c(400,100),
-                    pcPriorRange = c(100,0.5),pcPriorsd = c(0.5,0.5), usePcPriors = 0, zeroInflated = 0,
-                    obsModel = 2,
-                    mapRhoL = c(0,1,2), simulateProcedure = 1){
-  conf= list()
+defConf <- function(
+  years,
+  lengthGroups,
+  spatial = 1,
+  spatioTemporal = 1,
+  nugget = 1,
+  beta0 = 1,
+  splineDepth = c(6, 1),
+  sunAlt = c(1, 0),
+  duration = 0,
+  maxLength = 100,
+  minLength = 5,
+  reduceLength = 3,
+  cutoff = c(100, 100, 0),
+  cbound = c(400, 100),
+  pcPriorRange = c(100, 0.5),
+  pcPriorsd = c(0.5, 0.5),
+  usePcPriors = 0,
+  zeroInflated = 0,
+  obsModel = 2,
+  mapRhoL = c(0, 1, 2),
+  simulateProcedure = 1
+) {
+  conf = list()
   conf$lengthGroups = lengthGroups
   conf$years = years
-  conf$minLength=minLength
-  conf$maxLength=maxLength
+  conf$minLength = minLength
+  conf$maxLength = maxLength
   conf$dLength = 5
 
   #Covariates
   conf$sunAlt = sunAlt
-  conf$duration =duration
-  conf$splineDepth=splineDepth
-  conf$beta0=beta0
+  conf$duration = duration
+  conf$splineDepth = splineDepth
+  conf$beta0 = beta0
   conf$spatial = spatial
   conf$spatioTemporal = spatioTemporal
   conf$cutoff = cutoff
   conf$cbound = cbound
 
-  lTmp = rep(1:100,each = reduceLength)
+  lTmp = rep(1:100, each = reduceLength)
   conf$lengthGroupsReduced = lTmp[1:length(conf$lengthGroups)]
   conf$reduceLength = reduceLength
 
   conf$pcPriorRange = pcPriorRange
-  conf$pcPriorsd= pcPriorsd
+  conf$pcPriorsd = pcPriorsd
   conf$usePcPriors = usePcPriors
 
   conf$zeroInflated = zeroInflated
@@ -75,11 +91,42 @@ defConf <- function(years, lengthGroups,spatial = 1,spatioTemporal = 1,nugget = 
 ##' @param n provide number of integration points and number of bootstrap samples in internal validation routine
 ##' @details
 ##' @export
-defConfPred <- function(strata = 1:26,nIntPoints= 4000){
+defConfPred <- function(
+  strata = 1:26,
+  nIntPoints = 4000,
+  utmZone = 35,
+  useDataHull = FALSE
+) {
   confPred = list()
-  confPred$Strata=strata
+  confPred$Strata = strata
   confPred$nIntPoints = nIntPoints
+  confPred$utmZone = utmZone
+  confPred$useDataHull = useDataHull
   return(confPred)
+}
+
+##' defConfPredFromData
+##'
+##' Build prediction config from observed data (convex hull in UTM space).
+##' @param data List of per-year data frames (with UTMX/UTMY) or a data.frame.
+##' @param utmZone UTM zone used for UTM coordinates (default 35).
+##' @param nIntPoints Number of integration points for grid.
+##' @details
+##' @export
+defConfPredFromData <- function(data, utmZone = 35, nIntPoints = 4000) {
+  confPred <- defConfPred(
+    strata = 1,
+    nIntPoints = nIntPoints,
+    utmZone = utmZone,
+    useDataHull = TRUE
+  )
+  if (!is.data.frame(data)) {
+    utm <- do.call(rbind, lapply(data, function(d) d[, c("UTMX", "UTMY")]))
+  } else {
+    utm <- data[, c("UTMX", "UTMY")]
+  }
+  confPred$hullUTM <- utm
+  confPred
 }
 
 ##' setMap
@@ -90,106 +137,105 @@ defConfPred <- function(strata = 1:26,nIntPoints= 4000){
 ##' @param conf Configurations
 ##' @details
 ##' @export
-setMap <- function(par, conf){
-  map= list()
-  map$log_kappa = as.factor(c(0,1))
+setMap <- function(par, conf) {
+  map = list()
+  map$log_kappa = as.factor(c(0, 1))
   map$tan_rho_l = conf$mapRhoL #Default use same parameter for length correlation
 
-  if(conf$nugget[1] ==0){
-    map$log_sigma = as.factor(c(0,1,NA))
-    map$nugget = as.factor(rep(NA,length(par$nugget)))
-    map$nuggetIndex = as.factor(rep(NA,length(par$nuggetIndex)))
+  if (conf$nugget[1] == 0) {
+    map$log_sigma = as.factor(c(0, 1, NA))
+    map$nugget = as.factor(rep(NA, length(par$nugget)))
+    map$nuggetIndex = as.factor(rep(NA, length(par$nuggetIndex)))
     map$tan_rho_l[3] = NA
-  }else{
-    map$log_sigma = as.factor(c(0,1,2))
+  } else {
+    map$log_sigma = as.factor(c(0, 1, 2))
   }
 
-
-  if(conf$sunAlt[1]==0){
-    map$betaSun = as.factor(rep(NA,length(par$betaSun))) #Not use time in day
-  }else if(conf$sunAlt[2]==0){
-    tmp = 0:(conf$sunAlt[1]*2-1)
-    map$betaSun = as.factor(c(tmp,tmp)) #Not use length dependent time in day
+  if (conf$sunAlt[1] == 0) {
+    map$betaSun = as.factor(rep(NA, length(par$betaSun))) #Not use time in day
+  } else if (conf$sunAlt[2] == 0) {
+    tmp = 0:(conf$sunAlt[1] * 2 - 1)
+    map$betaSun = as.factor(c(tmp, tmp)) #Not use length dependent time in day
   }
-  if(conf$duration==0){
-    map$betahaul = as.factor(rep(NA,length = length(par$betahaul)))
+  if (conf$duration == 0) {
+    map$betahaul = as.factor(rep(NA, length = length(par$betahaul)))
   }
-  if(length(conf$years)==1){
+  if (length(conf$years) == 1) {
     map$tan_rho_t = as.factor(NA)
-    if(conf$spatial==1 & conf$spatioTemporal==1){
-      warning("Using both spatial and spatio-temporal with only one year of data will overparametrize the model, turn of spatio-temporal contribution")
-      conf$spatioTemporal=0;
+    if (conf$spatial == 1 & conf$spatioTemporal == 1) {
+      warning(
+        "Using both spatial and spatio-temporal with only one year of data will overparametrize the model, turn of spatio-temporal contribution"
+      )
+      conf$spatioTemporal = 0
     }
   }
-  if(conf$splineDepth[2]==0){
-    map$betaDepth=as.factor(rep(NA,length(par$betaDepth)))
-    map$log_lambda=as.factor(c(NA,NA))
-  }else if(conf$splineDepth[2]==1){
-    tmp = 0:(length(par$betaDepth)/2-1)
-    map$log_lambda=as.factor(c(0,0))
-    map$betaDepth = as.factor(c(tmp,tmp)) #Not use length dependent depth effect
-  }else if(conf$splineDepth[2]==1){
-    map$log_lambda=as.factor(c(0,0))#Use same lambda in both depth splines
+  if (conf$splineDepth[2] == 0) {
+    map$betaDepth = as.factor(rep(NA, length(par$betaDepth)))
+    map$log_lambda = as.factor(c(NA, NA))
+  } else if (conf$splineDepth[2] == 1) {
+    tmp = 0:(length(par$betaDepth) / 2 - 1)
+    map$log_lambda = as.factor(c(0, 0))
+    map$betaDepth = as.factor(c(tmp, tmp)) #Not use length dependent depth effect
+  } else if (conf$splineDepth[2] == 1) {
+    map$log_lambda = as.factor(c(0, 0)) #Use same lambda in both depth splines
   }
-  if(conf$beta0==0){
-    map$beta0=par$beta0
-    for(i in 1:dim(map$beta0)[2]){
-      map$beta0[,i]=i
+  if (conf$beta0 == 0) {
+    map$beta0 = par$beta0
+    for (i in 1:dim(map$beta0)[2]) {
+      map$beta0[, i] = i
     }
-    map$beta0=as.factor(map$beta0)
+    map$beta0 = as.factor(map$beta0)
   }
 
-  if(conf$spatial ==0){
-    map$xS = as.factor(rep(NA,length(par$xS)))
-    if(conf$nugget[1] ==0){
-      map$log_sigma= as.factor(c(NA,0,NA))
-    }else{
-      map$log_sigma= as.factor(c(NA,0,1))
+  if (conf$spatial == 0) {
+    map$xS = as.factor(rep(NA, length(par$xS)))
+    if (conf$nugget[1] == 0) {
+      map$log_sigma = as.factor(c(NA, 0, NA))
+    } else {
+      map$log_sigma = as.factor(c(NA, 0, 1))
     }
-    map$log_kappa= as.factor(c(NA,0))
-    map$tan_rho_l[1]= NA
-    map$tan_rho_l[2:3]  = map$tan_rho_l[2:3]-1
+    map$log_kappa = as.factor(c(NA, 0))
+    map$tan_rho_l[1] = NA
+    map$tan_rho_l[2:3] = map$tan_rho_l[2:3] - 1
   }
-  if(conf$spatioTemporal ==0){
-    map$xST = as.factor(rep(NA,length(par$xST)))
+  if (conf$spatioTemporal == 0) {
+    map$xST = as.factor(rep(NA, length(par$xST)))
     map$tan_rho_t = as.factor(NA)
-    if(conf$spatial ==0){
-      map$log_kappa= as.factor(c(NA,NA))
-      if(conf$nugget[1] ==0){
-        map$log_sigma= as.factor(c(NA,NA,NA))
-        map$tan_rho_l[3]= NA
-      }else{
-        map$log_sigma= as.factor(c(NA,NA,1))
-        map$tan_rho_l[3]= 0
+    if (conf$spatial == 0) {
+      map$log_kappa = as.factor(c(NA, NA))
+      if (conf$nugget[1] == 0) {
+        map$log_sigma = as.factor(c(NA, NA, NA))
+        map$tan_rho_l[3] = NA
+      } else {
+        map$log_sigma = as.factor(c(NA, NA, 1))
+        map$tan_rho_l[3] = 0
       }
-      map$tan_rho_l[1:2]= c(NA,NA)
-
-    }else{
-      map$log_kappa= as.factor(c(0,NA))
-      if(conf$nugget[1] ==0){
-        map$log_sigma= as.factor(c(0,NA,NA))
-        map$tan_rho_l[3] =   NA
-      }else{
-        map$log_sigma= as.factor(c(0,NA,1))
-        map$tan_rho_l[3] =   map$tan_rho_l[3]-1
+      map$tan_rho_l[1:2] = c(NA, NA)
+    } else {
+      map$log_kappa = as.factor(c(0, NA))
+      if (conf$nugget[1] == 0) {
+        map$log_sigma = as.factor(c(0, NA, NA))
+        map$tan_rho_l[3] = NA
+      } else {
+        map$log_sigma = as.factor(c(0, NA, 1))
+        map$tan_rho_l[3] = map$tan_rho_l[3] - 1
       }
-      map$tan_rho_l[2] =  NA
+      map$tan_rho_l[2] = NA
     }
   }
 
-  if(conf$obsModel==2){
+  if (conf$obsModel == 2) {
     map$logSize = as.factor(NA)
   }
 
-
-
-  if(conf$zeroInflated==0){
-    map$delta_z = as.factor(rep(NA,length(par$delta_z)))
-  }else{
-    warning("Map-functionality not yet implemented for selected zero-inflation procedure.")
+  if (conf$zeroInflated == 0) {
+    map$delta_z = as.factor(rep(NA, length(par$delta_z)))
+  } else {
+    warning(
+      "Map-functionality not yet implemented for selected zero-inflation procedure."
+    )
   }
 
   map$tan_rho_l = as.factor(map$tan_rho_l)
   return(map)
 }
-

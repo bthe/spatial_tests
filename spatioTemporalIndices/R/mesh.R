@@ -4,12 +4,16 @@
 #'
 #' @param  cutoff Parameter providing density of mesh
 #' @param  cbound Boundary parameter
+#' @param  confPred Prediction configuration (used to construct integration points)
 #' @return Mesh used
 #'
 #' @export
-createMesh <- function(cutoff = NULL, cbound = NULL){
+createMesh <- function(cutoff = NULL, cbound = NULL, confPred = NULL){
   maxEdge = c(cutoff,cutoff*4) # Longer distances between nodes outside if inner bounderary
 
+  if (is.null(confPred)) {
+    confPred <- defConfPred()
+  }
   intPoints = constructIntPoints(confPred)$locUTM
 
   boundary.loc <- SpatialPoints(as.matrix(intPoints))

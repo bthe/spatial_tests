@@ -102,11 +102,10 @@ pointsInStratum<-function(strataNumbers,stratas,locations){
   locationsSpObject=SpatialPoints(locations,proj4string=CRS("+proj=longlat"))
   toReturn = NULL;
   for(i in strataNumbers){
-    g1=rgeos::readWKT(stratas$V2[i])
+    g1=as(sf::st_as_sfc(stratas$V2[i], crs = 4326), "Spatial")
     proj4string(g1)=CRS("+proj=longlat")
     toReturn = c(toReturn,which(!is.na(over(locationsSpObject,g1))))
   }
   return(toReturn)
 }
-
 
