@@ -2,7 +2,7 @@ library(tidyverse)
 
 df <-
   readr::read_csv('ldists.csv') |>
-  dplyr::filter(sampling_type == 30) |>
+  dplyr::filter(sampling_type == 30, year %in% conf$years) |>
   dplyr::select(
     year,
     month,
